@@ -103,6 +103,7 @@ eye-care/
 │   └── tauri.conf.json     # Tauri 应用配置
 ├── docs/                   # 文档
 │   ├── SPEC.md             # 需求规格说明书
+│   ├── MEDICATION_REMINDER.md  # 用药提醒功能方案
 │   └── DEVELOPMENT.md      # 开发文档
 ├── package.json            # Node.js 依赖
 └── LICENSE                 # Apache 2.0 License
@@ -213,6 +214,17 @@ npm run build
 | macOS | NSEvent | - | DMG (计划中) |
 | Linux | XScreenSaver | - | AppImage (计划中) |
 
+### 路线图
+
+| 版本 | 功能 | 状态 |
+|------|------|------|
+| v0.2.0 | 护眼提醒 + 喝水提醒 + AI 文案 + 宠物系统 | 已完成 |
+| v0.3.0 | **用药提醒** - 多药品管理、多级提醒、服药确认、库存预警 | 规划中 |
+| v0.4.0 | **AI 用药助手** - 用药咨询对话、智能排程、依从性周报 | 规划中 |
+| v0.5.0 | 药物相互作用检测、用药记录导出、多设备同步 | 远期 |
+
+> 用药提醒功能详细方案见 [docs/MEDICATION_REMINDER.md](docs/MEDICATION_REMINDER.md)
+
 ### 许可证
 
 [Apache License 2.0](LICENSE)
@@ -318,6 +330,7 @@ eye-care/
 │   └── tauri.conf.json     # Tauri app configuration
 ├── docs/                   # Documentation
 │   ├── SPEC.md             # Requirements specification
+│   ├── MEDICATION_REMINDER.md  # Medication reminder feature design
 │   └── DEVELOPMENT.md      # Development guide
 ├── package.json            # Node.js dependencies
 └── LICENSE                 # Apache 2.0 License
@@ -427,6 +440,17 @@ Tencent Meeting, Zoom, Teams, Skype, DingTalk, Feishu, Tencent QQ, WeChat, Enter
 | Windows | GetLastInputInfo | Window title detection | NSIS / MSI |
 | macOS | NSEvent | - | DMG (planned) |
 | Linux | XScreenSaver | - | AppImage (planned) |
+
+### Roadmap
+
+| Version | Feature | Status |
+|---------|---------|--------|
+| v0.2.0 | Eye break + Water reminder + AI messages + Pet system | Done |
+| v0.3.0 | **Medication Reminder** - Multi-med management, escalation alerts, dose confirmation, stock alerts | Planned |
+| v0.4.0 | **AI Medication Assistant** - Consultation dialog, smart scheduling, adherence reports | Planned |
+| v0.5.0 | Drug interaction detection, medication log export, multi-device sync | Future |
+
+> Detailed medication reminder design: [docs/MEDICATION_REMINDER.md](docs/MEDICATION_REMINDER.md)
 
 ### License
 

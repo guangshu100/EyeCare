@@ -237,7 +237,7 @@ impl Default for AiConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            version: "1.0.0".to_string(),
+            version: "0.2.0".to_string(),
             idle_threshold: 40,
             check_interval: 2,
             break_duration: 60,
