@@ -1,6 +1,6 @@
 [package]
 name = "eye-care"
-version = "0.2.0"
+version = "0.3.0"
 description = "A lightweight eye care reminder tool with AI enhancement"
 authors = ["EyeCare Team"]
 edition = "2021"

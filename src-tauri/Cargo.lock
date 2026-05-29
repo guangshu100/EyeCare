@@ -667,7 +667,7 @@ dependencies = [
 
 [[package]]
 name = "core-graphics-types"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d44a101f213f6c4cdc1853d4b78aef6db6bdfa3468798cc1d9912f4735013eb"
 dependencies = [
@@ -1136,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "eye-care"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
