@@ -53,6 +53,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   try {
     await loadConfig();
     await loadWaterConfig();
+    await loadMedicationConfig();
     await loadPetState();
     setupEventListeners();
     setupIdleListener();
@@ -60,9 +61,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     setupFullscreenListener();
     setupResumeListener();
     setupWaterNotificationListener();
+    setupMedicationListeners();
     updateStatus();
     startLocalCountdown();
     startWaterCountdown();
+    startMedicationCountdown();
   } catch (e) {
     console.error("Failed to initialize:", e);
   }
@@ -213,10 +216,10 @@ function setupEventListeners() {
   document.getElementById("toggle-pause").addEventListener("click", togglePause);
   document.getElementById("test-break").addEventListener("click", testBreak);
   document.getElementById("drink-water-btn").addEventListener("click", drinkWater);
-  
+
   // 宠物互动
   document.getElementById("pet-avatar-header").addEventListener("click", petInteract);
-  
+
   // 喝水设置
   document.getElementById("water-enabled").addEventListener("change", (e) => {
     toggleWaterConfig(e.target.checked);
@@ -248,6 +251,20 @@ function setupEventListeners() {
   
   document.getElementById("water-start-hour").addEventListener("change", saveWaterConfig);
   document.getElementById("water-end-hour").addEventListener("change", saveWaterConfig);
+
+  // 用药提醒
+  document.getElementById("medication-enabled").addEventListener("change", () => {
+    toggleMedicationConfig(document.getElementById("medication-enabled").checked);
+    saveMedicationConfig();
+  });
+  document.getElementById("med-escalation").addEventListener("input", (e) => {
+    document.getElementById("med-escalation-value").textContent = `${e.target.value}分钟`;
+  });
+  document.getElementById("med-escalation").addEventListener("change", saveMedicationConfig);
+  document.getElementById("med-notify").addEventListener("change", saveMedicationConfig);
+  document.getElementById("med-confirm").addEventListener("change", saveMedicationConfig);
+  document.getElementById("med-form").addEventListener("submit", onMedicationFormSubmit);
+  document.getElementById("med-cancel-btn").addEventListener("click", resetMedicationForm);
 }
 
 function toggleAiConfig(show) {
@@ -698,17 +715,147 @@ function startLocalCountdown() {
       const workMinutes = Math.floor(continuousWorkSeconds / 60);
       const workSeconds = continuousWorkSeconds % 60;
       document.getElementById("continuous-work-time").textContent = `${workMinutes}分${workSeconds}秒`;
-      
-      if (nextReminderSeconds > 0) {
-        nextReminderSeconds--;
-        const remMin = Math.floor(nextReminderSeconds / 60);
-        const remSec = nextReminderSeconds % 60;
-        document.getElementById("next-reminder").textContent = `${remMin}分${remSec}秒`;
-      } else {
-        document.getElementById("next-reminder").textContent = "即将提醒";
-      }
+      // 眼睛休息倒计时每秒递减
+      if (nextReminderSeconds > 0) nextReminderSeconds--;
     }
+    // 喝水倒计时不受暂停影响，按 1 秒递减
+    if (waterConfig && waterConfig.enabled && waterNextReminder > 0) {
+      waterNextReminder--;
+    }
+    // 渲染"接下来"卡片（即使暂停也渲染，让用户看到吃药的固定时点）
+    renderUpcoming();
   }, 1000);
+}
+
+// ==================== 接下来 卡片渲染 ====================
+
+/**
+ * 渲染"接下来"芯片：下一次休息 / 下一次喝水 / 下一次吃药（单行内嵌）
+ * - 眼睛休息和喝水用 ⏱ + mm:ss 倒计时（一眼看出"在 N 时间后"）
+ * - 吃药用 🕐 + HH:MM 固定时点（一眼看出"几点几分准时"）
+ * - < 5min 渐变橙（soon），< 1min 强提醒（urgent）
+ */
+function renderUpcoming() {
+  const restEl = document.getElementById("upcoming-rest");
+  const waterEl = document.getElementById("upcoming-water");
+  const medEl = document.getElementById("upcoming-medication");
+  if (!restEl || !waterEl || !medEl) return;
+
+  // 1) 眼睛休息：暂停时隐藏
+  if (isPaused) {
+    restEl.classList.add("hidden");
+  } else {
+    restEl.classList.remove("hidden");
+    const restTimeEl = document.getElementById("upcoming-rest-time");
+    if (nextReminderSeconds > 0) {
+      // ⏱ + mm:ss 倒计时格式：明确"在 N 时间后"
+      restTimeEl.textContent = `⏱ ${formatMmSs(nextReminderSeconds)}`;
+      applyChipState(restEl, nextReminderSeconds);
+    } else {
+      restTimeEl.textContent = "⏱ 立即";
+      restEl.classList.add("urgent");
+      restEl.classList.remove("soon");
+    }
+  }
+
+  // 2) 喝水：未启用或非活跃时段隐藏
+  if (!waterConfig || !waterConfig.enabled) {
+    waterEl.classList.add("hidden");
+  } else {
+    waterEl.classList.remove("hidden");
+    const waterTimeEl = document.getElementById("upcoming-water-time");
+    const inActive = waterConfig.is_in_active_hours !== false;
+    if (!inActive) {
+      // ⏹ 明确"暂停中"语义，与"立即"区分
+      waterTimeEl.textContent = "⏹ 休眠";
+      waterEl.classList.remove("urgent", "soon");
+    } else if (waterNextReminder > 0) {
+      waterTimeEl.textContent = `⏱ ${formatMmSs(waterNextReminder)}`;
+      applyChipState(waterEl, waterNextReminder);
+    } else {
+      waterTimeEl.textContent = "⏱ 立即";
+      waterEl.classList.add("urgent");
+      waterEl.classList.remove("soon");
+    }
+  }
+
+  // 3) 吃药：未启用 或 没有待服药时隐藏
+  const medInfo = computeNextMedication();
+  if (!medInfo) {
+    medEl.classList.add("hidden");
+  } else {
+    medEl.classList.remove("hidden");
+    const medTimeEl = document.getElementById("upcoming-medication-time");
+    const medNameEl = document.getElementById("upcoming-medication-name");
+
+    // 名称字段：直接显示药名（替代静态"用药"，一眼看出具体药物）
+    if (medNameEl) {
+      medNameEl.textContent = medInfo.medicationName || "用药";
+    }
+
+    // 时间字段：🕐 时点 + 倒计时（< 5min 时追加"·X分"，明确距离）
+    const mins = Math.max(1, Math.round(medInfo.remaining / 60));
+    if (medInfo.remaining <= 300) {
+      // 5 分钟内：追加倒计时（此时最重要）
+      medTimeEl.textContent = `🕐 ${medInfo.scheduledTime} · ${mins}分`;
+    } else {
+      // 平时：仅时点（保持紧凑，避免 chip 太长）
+      medTimeEl.textContent = `🕐 ${medInfo.scheduledTime}`;
+    }
+    // title 始终显示完整信息
+    medEl.title = `下一次吃药 ${medInfo.scheduledTime}（${medInfo.medicationName}，还有约 ${mins} 分钟）`;
+    applyChipState(medEl, medInfo.remaining);
+  }
+}
+
+/** 应用 chip 的紧急/即将状态样式 */
+function applyChipState(chipEl, remaining) {
+  chipEl.classList.remove("soon", "urgent");
+  if (remaining <= 60) {
+    chipEl.classList.add("urgent");
+  } else if (remaining <= 300) {
+    chipEl.classList.add("soon");
+  }
+}
+
+/** 把秒数格式化为 mm:ss（或 h:mm:ss 当 >= 1 小时） */
+function formatMmSs(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+  return `${pad(m)}:${pad(s)}`;
+}
+
+/**
+ * 从 medicationConfig.today_logs 中找最近的 Pending 时点
+ * @returns {{scheduledTime: string, remaining: number, medicationName: string} | null}
+ */
+function computeNextMedication() {
+  if (!medicationConfig || !medicationConfig.enabled) return null;
+  const logs = medicationConfig.today_logs || [];
+  const now = new Date();
+  const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+  let best = null;
+  for (const log of logs) {
+    if (log.status !== "Pending") continue;
+    const m = /^(\d{1,2}):(\d{2})$/.exec(log.scheduled_time || "");
+    if (!m) continue;
+    const targetSec = parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60;
+    const remaining = targetSec - nowSec;
+    if (remaining < 0) continue; // 已过，跳过
+    if (best === null || remaining < best.remaining) {
+      best = {
+        scheduledTime: log.scheduled_time,
+        medicationName: log.medication_name,
+        remaining,
+      };
+    }
+  }
+  return best; // { scheduledTime, remaining, medicationName } 或 null
 }
 
 // ==================== 喝水提醒 ====================
@@ -877,18 +1024,176 @@ async function updateWaterStats() {
   }
 }
 
+// 注：waterNextReminder 的递减与渲染已统一在 startLocalCountdown 中处理
 function startWaterCountdown() {
-  setInterval(() => {
-    if (waterConfig && waterConfig.enabled && waterNextReminder > 0) {
-      waterNextReminder--;
-    }
-  }, 1000);
+  // 保留函数占位（兼容性调用），实际逻辑合并到 startLocalCountdown
 }
 
 async function setupWaterNotificationListener() {
-  await listen("water-reminder", async () => {
-    await updateWaterStats();
+  await listen("water-reminder", async (event) => {
+    console.log("[water] reminder event received:", event.payload);
+    const body = typeof event.payload === "string" ? event.payload : "该喝水啦～";
+    try {
+      // 弹居中 modal（主通道，独立于独立窗口）
+      showWaterModal(body);
+      console.log("[water] modal shown");
+      // 刷新数据
+      await updateWaterStats();
+    } catch (e) {
+      console.error("[water] modal render failed:", e);
+    }
   });
+
+  // 外部窗口关闭时，同步关闭内部 modal
+  await listen("water-reminder-closed", () => {
+    const overlay = document.getElementById("water-modal-overlay");
+    if (overlay) {
+      clearTimeout(overlay._timer);
+      overlay.classList.remove("show");
+      setTimeout(() => overlay.remove(), 300);
+    }
+  });
+
+  console.log("[water] reminder listener registered");
+}
+
+/**
+ * 喝水居中 modal 弹窗（主通道）
+ * 总是能在用户当前可见的应用窗口中弹出
+ * 配合 Rust 端独立 always_on_top 窗口，可实现"双通道"提醒
+ */
+function showWaterModal(body) {
+  // 移除已存在的
+  const old = document.getElementById("water-modal-overlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "water-modal-overlay";
+  overlay.className = "water-modal-overlay";
+
+  const card = document.createElement("div");
+  card.className = "water-modal";
+  card.innerHTML = `
+    <div class="water-modal-icon">💧</div>
+    <div class="water-modal-title">喝水时间到</div>
+    <div class="water-modal-msg">${escapeHtml(body)}</div>
+    <div class="water-modal-actions">
+      <button class="water-modal-btn water-modal-btn-primary" data-act="drink">🥤 喝了一杯</button>
+      <button class="water-modal-btn" data-act="half">💧 半杯</button>
+      <button class="water-modal-btn water-modal-btn-ghost" data-act="dismiss">✕ 稍后</button>
+    </div>
+  `;
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => overlay.classList.add("show"));
+
+  // 关闭函数
+  function close() {
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 300);
+    document.removeEventListener("keydown", escHandler);
+  }
+  function escHandler(e) {
+    if (e.key === "Escape") close();
+  }
+  document.addEventListener("keydown", escHandler);
+
+  // 点击遮罩关闭（点击卡片不关闭）
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+
+  // 按钮事件
+  card.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      if (btn.dataset.act === "drink") {
+        const cupMl = (waterConfig && waterConfig.cup_size_ml) || 250;
+        await invoke("record_water_intake", { ml: cupMl });
+      } else if (btn.dataset.act === "half") {
+        const cupMl = Math.round(((waterConfig && waterConfig.cup_size_ml) || 250) / 2);
+        await invoke("record_water_intake", { ml: cupMl });
+      }
+      close();
+      await updateWaterStats();
+    } catch (err) {
+      console.error("Water modal action failed:", err);
+      btn.disabled = false;
+    }
+  });
+
+  // 90 秒自动关闭
+  overlay._timer = setTimeout(close, 90000);
+}
+
+/**
+ * 喝水持久化 toast（最长 60 秒）
+ * 支持"我喝了"快捷按钮（直接调用 recordWaterIntake）
+ */
+function showWaterToast(body) {
+  let container = document.getElementById("water-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "water-toast-container";
+    container.className = "water-toast-container";
+    document.body.appendChild(container);
+  }
+
+  const el = document.createElement("div");
+  el.className = "water-toast";
+  el.innerHTML = `
+    <div class="water-toast-icon">💧</div>
+    <div class="water-toast-body">
+      <div class="water-toast-title">💧 喝水时间到</div>
+      <div class="water-toast-msg">${escapeHtml(body)}</div>
+      <div class="water-toast-actions">
+        <button class="water-toast-btn water-toast-btn-primary" data-act="drink">🥤 喝了一杯</button>
+        <button class="water-toast-btn" data-act="half">💧 半杯</button>
+        <button class="water-toast-btn water-toast-btn-ghost" data-act="dismiss">✕ 稍后</button>
+      </div>
+    </div>
+  `;
+
+  el.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      if (btn.dataset.act === "drink") {
+        const cupMl = (waterConfig && waterConfig.cup_size_ml) || 250;
+        await invoke("record_water_intake", { ml: cupMl });
+      } else if (btn.dataset.act === "half") {
+        const cupMl = Math.round(((waterConfig && waterConfig.cup_size_ml) || 250) / 2);
+        await invoke("record_water_intake", { ml: cupMl });
+      }
+      clearWaterToast(el);
+      await updateWaterStats();
+    } catch (err) {
+      console.error("Water toast action failed:", err);
+      btn.disabled = false;
+    }
+  });
+
+  container.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+
+  const total = 90000; // 90 秒自动消失，鼠标悬停暂停
+  el._timer = setTimeout(() => clearWaterToast(el), total);
+  el.addEventListener("mouseenter", () => clearTimeout(el._timer));
+  el.addEventListener("mouseleave", () => {
+    el._timer = setTimeout(() => clearWaterToast(el), total);
+  });
+}
+
+function clearWaterToast(el) {
+  if (!el || !el.parentNode) return;
+  clearTimeout(el._timer);
+  el.classList.remove("show");
+  setTimeout(() => el.parentNode && el.parentNode.removeChild(el), 300);
 }
 
 // ==================== 其他监听 ====================
@@ -943,6 +1248,450 @@ async function setupResumeListener() {
   await listen("system-resumed", (event) => {
     console.log("System resumed from sleep, gap:", event.payload);
   });
+}
+
+// ==================== 用药提醒 ====================
+
+let medicationConfig = null;
+let medicationNextSeconds = 0;
+let editingMedicationId = "";
+
+async function loadMedicationConfig() {
+  try {
+    medicationConfig = await invoke("get_medication_config");
+    applyMedicationConfigToUI();
+    renderMedicationToday();
+    renderMedicationList();
+    updateMedicationAdherence();
+  } catch (e) {
+    console.error("Failed to load medication config:", e);
+  }
+}
+
+function applyMedicationConfigToUI() {
+  if (!medicationConfig) return;
+
+  document.getElementById("medication-enabled").checked = medicationConfig.enabled;
+  toggleMedicationConfig(medicationConfig.enabled);
+  document.getElementById("med-escalation").value = medicationConfig.escalation_minutes || 30;
+  document.getElementById("med-escalation-value").textContent = `${medicationConfig.escalation_minutes || 30}分钟`;
+  document.getElementById("med-notify").checked = medicationConfig.notifications_enabled !== false;
+  document.getElementById("med-confirm").checked = medicationConfig.confirm_required !== false;
+}
+
+function toggleMedicationConfig(show) {
+  document.getElementById("medication-config").classList.toggle("hidden", !show);
+}
+
+async function saveMedicationConfig() {
+  if (!medicationConfig) return;
+  const newCfg = {
+    ...medicationConfig,
+    enabled: document.getElementById("medication-enabled").checked,
+    notifications_enabled: document.getElementById("med-notify").checked,
+    confirm_required: document.getElementById("med-confirm").checked,
+    escalation_minutes: parseInt(document.getElementById("med-escalation").value, 10),
+  };
+  try {
+    await invoke("save_medication_config", { newConfig: newCfg });
+    medicationConfig = newCfg;
+    await loadMedicationConfig();
+  } catch (e) {
+    console.error("Failed to save medication config:", e);
+  }
+}
+
+function renderMedicationToday() {
+  const listEl = document.getElementById("med-today-list");
+  if (!listEl) return;
+  const logs = (medicationConfig && medicationConfig.today_logs) || [];
+  if (logs.length === 0) {
+    listEl.innerHTML = '<div class="med-empty">还没有药品，添加一个开始吧 👇</div>';
+    return;
+  }
+  listEl.innerHTML = logs.map((log) => {
+    const status = log.status || "Pending";
+    const stateClass = `med-log-${status.toLowerCase()}`;
+    const stateLabel = ({
+      Pending: "⏰ 待服药",
+      Taken: "✅ 已服用",
+      Skipped: "🚫 已跳过",
+      Delayed: "🕐 延迟",
+      Missed: "❌ 错过",
+    })[status] || status;
+    let actions = "";
+    if (status === "Pending") {
+      actions = `
+        <button class="med-btn med-btn-primary" data-act="confirm" data-id="${log.id}">✅ 已服</button>
+        <button class="med-btn" data-act="snooze" data-id="${log.id}">⏱ 10分钟</button>
+        <button class="med-btn" data-act="skip" data-id="${log.id}">🚫 跳过</button>
+      `;
+    }
+    const note = log.notes ? `<span class="med-log-note">${escapeHtml(log.notes)}</span>` : "";
+    return `
+      <div class="med-log ${stateClass}">
+        <div class="med-log-time">${escapeHtml(log.scheduled_time)}</div>
+        <div class="med-log-body">
+          <div class="med-log-name">${escapeHtml(log.medication_name)}</div>
+          ${note}
+        </div>
+        <div class="med-log-status">${stateLabel}</div>
+        <div class="med-log-actions">${actions}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderMedicationList() {
+  const listEl = document.getElementById("med-list");
+  if (!listEl) return;
+  const meds = (medicationConfig && medicationConfig.medications) || [];
+  if (meds.length === 0) {
+    listEl.innerHTML = '<div class="med-empty">尚未添加药品</div>';
+    return;
+  }
+  listEl.innerHTML = meds.map((m) => {
+    const stockTxt = m.stock_remaining != null
+      ? `📦 库存 ${m.stock_remaining}${escapeHtml(m.unit || "")}`
+      : "";
+    return `
+      <div class="med-item">
+        <div class="med-item-icon" style="background:${escapeAttr(m.color || '#4CAF50')}">${escapeHtml(m.icon || "💊")}</div>
+        <div class="med-item-body">
+          <div class="med-item-title">
+            <span>${escapeHtml(m.name)}</span>
+            <span class="med-item-dose">${escapeHtml(m.dosage || "")} × ${m.quantity_per_dose || 1}${escapeHtml(m.unit || "")}</span>
+          </div>
+          <div class="med-item-meta">
+            <span>${(m.schedule.times || []).map(t => `${pad2(t.hour)}:${pad2(t.minute)}`).join(" / ") || "未设置"}</span>
+            ${stockTxt ? `<span>${stockTxt}</span>` : ""}
+            <span class="med-item-status ${m.enabled ? 'on' : 'off'}">${m.enabled ? '已启用' : '已暂停'}</span>
+          </div>
+        </div>
+        <div class="med-item-actions">
+          <button class="med-btn" data-act="edit" data-id="${escapeAttr(m.id)}">编辑</button>
+          <button class="med-btn" data-act="toggle" data-id="${escapeAttr(m.id)}">${m.enabled ? '停用' : '启用'}</button>
+          <button class="med-btn med-btn-danger" data-act="delete" data-id="${escapeAttr(m.id)}">删除</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function pad2(n) {
+  n = parseInt(n, 10) || 0;
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+async function updateMedicationAdherence() {
+  try {
+    const adherence = await invoke("get_medication_adherence");
+    const fill = document.getElementById("med-adherence-fill");
+    const val = document.getElementById("med-adherence-value");
+    if (fill) fill.style.width = `${adherence}%`;
+    if (val) val.textContent = `${adherence}%`;
+  } catch (e) {
+    console.error("Failed to get adherence:", e);
+  }
+}
+
+async function onMedicationFormSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById("med-id").value;
+  const times = [];
+  for (let i = 1; i <= 3; i++) {
+    const t = document.getElementById(`med-time-${i}`).value;
+    const lbl = document.getElementById(`med-time-label-${i}`).value;
+    if (t) {
+      const [h, m] = t.split(":");
+      times.push({ hour: parseInt(h, 10), minute: parseInt(m, 10), label: lbl || "" });
+    }
+  }
+  if (times.length === 0) {
+    alert("请至少设置一个服药时间");
+    return;
+  }
+  const stockRaw = document.getElementById("med-stock").value;
+  const stock = stockRaw === "" ? null : parseFloat(stockRaw);
+
+  // 若是编辑模式，从 medicationConfig 中取出原 schedule 的不可变字段，避免数据丢失
+  const original = id ? medicationConfig.medications.find((m) => m.id === id) : null;
+  const originalSchedule = original ? original.schedule : null;
+
+  const med = {
+    id: id || "",
+    name: document.getElementById("med-name").value.trim(),
+    generic_name: original ? original.generic_name : "",
+    dosage: document.getElementById("med-dosage").value.trim(),
+    form: document.getElementById("med-form").value,
+    unit: document.getElementById("med-unit").value.trim() || "片",
+    quantity_per_dose: parseFloat(document.getElementById("med-quantity").value) || 1,
+    schedule: {
+      times,
+      relation: document.getElementById("med-relation").value,
+      // 编辑时若表单未提供 days（UI 未暴露该字段），沿用原值
+      days: originalSchedule && originalSchedule.days ? originalSchedule.days : [],
+      start_date:
+        (originalSchedule && originalSchedule.start_date) ||
+        new Date().toISOString().split("T")[0],
+      end_date: originalSchedule ? originalSchedule.end_date : null,
+    },
+    notes: document.getElementById("med-notes").value,
+    color: document.getElementById("med-color").value,
+    icon: document.getElementById("med-icon").value || "💊",
+    // 编辑时沿用原 enabled；添加时默认 true
+    enabled: original ? original.enabled : true,
+    // 编辑时若库存输入框留空，沿用原库存
+    stock_remaining: stock != null ? stock : (original ? original.stock_remaining : null),
+    stock_alert_threshold: parseFloat(document.getElementById("med-stock-threshold").value) || 7,
+    created_at: original ? original.created_at : "",
+    tags: original ? original.tags : [],
+    interval_hours: 0,
+  };
+
+  console.log("[med] submitting:", { id: med.id, name: med.name, op: id ? "update" : "add" });
+  try {
+    if (id) {
+      await invoke("update_medication", { medication: med });
+    } else {
+      await invoke("add_medication", { medication: med });
+    }
+    resetMedicationForm();
+    await loadMedicationConfig();
+  } catch (err) {
+    console.error("[med] save failed:", err);
+    alert(`保存失败: ${err}`);
+  }
+}
+
+function resetMedicationForm() {
+  editingMedicationId = "";
+  document.getElementById("med-form-title").textContent = "➕ 添加药品";
+  document.getElementById("med-form").reset();
+  document.getElementById("med-id").value = "";
+  document.getElementById("med-form").value = "Tablet";
+  document.getElementById("med-quantity").value = "1";
+  document.getElementById("med-unit").value = "片";
+  document.getElementById("med-time-1").value = "08:00";
+  document.getElementById("med-time-label-1").value = "早餐后";
+  document.getElementById("med-time-2").value = "";
+  document.getElementById("med-time-label-2").value = "";
+  document.getElementById("med-time-3").value = "";
+  document.getElementById("med-time-label-3").value = "";
+  document.getElementById("med-color").value = "#4CAF50";
+  document.getElementById("med-icon").value = "💊";
+  document.getElementById("med-relation").value = "AfterMeal";
+  document.getElementById("med-cancel-btn").style.display = "none";
+}
+
+function startEditingMedication(med) {
+  editingMedicationId = med.id;
+  document.getElementById("med-form-title").textContent = "✏️ 编辑药品";
+  document.getElementById("med-id").value = med.id;
+  document.getElementById("med-name").value = med.name || "";
+  document.getElementById("med-form").value = med.form || "Tablet";
+  document.getElementById("med-dosage").value = med.dosage || "";
+  document.getElementById("med-quantity").value = med.quantity_per_dose || 1;
+  document.getElementById("med-unit").value = med.unit || "片";
+  document.getElementById("med-relation").value = med.schedule?.relation || "AnyTime";
+  document.getElementById("med-color").value = med.color || "#4CAF50";
+  document.getElementById("med-icon").value = med.icon || "💊";
+  document.getElementById("med-stock").value = med.stock_remaining ?? "";
+  document.getElementById("med-stock-threshold").value = med.stock_alert_threshold || 7;
+  document.getElementById("med-notes").value = med.notes || "";
+
+  const times = med.schedule?.times || [];
+  for (let i = 0; i < 3; i++) {
+    const t = times[i] || { hour: 0, minute: 0, label: "" };
+    document.getElementById(`med-time-${i + 1}`).value =
+      t.hour || t.minute ? `${pad2(t.hour)}:${pad2(t.minute)}` : "";
+    document.getElementById(`med-time-label-${i + 1}`).value = t.label || "";
+  }
+  document.getElementById("med-cancel-btn").style.display = "inline-block";
+  document.getElementById("medication-config").scrollIntoView({ behavior: "smooth" });
+}
+
+async function onMedicationAction(e) {
+  const btn = e.target.closest("[data-act]");
+  if (!btn) return;
+  const act = btn.dataset.act;
+  const id = btn.dataset.id;
+  if (!id) return;
+  try {
+    if (act === "confirm") {
+      await invoke("confirm_dose", { logId: id });
+    } else if (act === "skip") {
+      const reason = prompt("请输入跳过原因（可留空）：") || null;
+      await invoke("skip_dose", { logId: id, reason });
+    } else if (act === "snooze") {
+      await invoke("snooze_dose", { logId: id, minutes: 10 });
+    } else if (act === "edit") {
+      const med = medicationConfig.medications.find((m) => m.id === id);
+      if (med) startEditingMedication(med);
+      return;
+    } else if (act === "delete") {
+      if (!confirm("确认删除此药品？")) return;
+      await invoke("delete_medication", { medicationId: id });
+    } else if (act === "toggle") {
+      const med = medicationConfig.medications.find((m) => m.id === id);
+      if (!med) return;
+      med.enabled = !med.enabled;
+      await invoke("update_medication", { medication: med });
+    }
+    await loadMedicationConfig();
+  } catch (err) {
+    alert(`操作失败: ${err}`);
+  }
+}
+
+function setupMedicationListeners() {
+  // 列表/今日计划操作
+  document.getElementById("med-today-list").addEventListener("click", onMedicationAction);
+  document.getElementById("med-list").addEventListener("click", onMedicationAction);
+
+  // 后端事件：服药/跳过/稍后（从提醒窗口触发后通知主窗口同步）
+  listen("medication-dosed", async () => {
+    await loadMedicationConfig();
+  });
+  listen("medication-snoozed", async () => {
+    await loadMedicationConfig();
+  });
+
+  // 后端事件：弹窗主窗 toast（提醒窗口是 always-on-top 持久化的，主窗这里也显示一条带操作按钮的 toast）
+  listen("medication-reminder", async (event) => {
+    const log = event.payload;
+    if (!log) return;
+    // 主窗 fallback toast（10 分钟自动消失，含操作按钮）
+    showMedicationToast(buildReminderToastData(log));
+    await loadMedicationConfig();
+  });
+
+  listen("medication-stock-alert", async (event) => {
+    const text = event.payload || "药品库存不足";
+    showMedicationToast({ kind: "stock", text });
+  });
+
+  // 外部窗口关闭时，同步关闭内部 toast
+  listen("medication-reminder-closed", () => {
+    const container = document.getElementById("med-toast-container");
+    if (container) {
+      container.querySelectorAll(".med-toast").forEach((el) => {
+        clearToast(el);
+      });
+    }
+  });
+}
+
+function buildReminderToastData(log) {
+  const sev = log.severity || 0;
+  const sevText = ["⏰ 准时提醒", "💊 该吃药", "⚠️ 稍延迟", "🔴 已超时"][Math.min(sev, 3)];
+  return {
+    kind: "reminder",
+    logId: log.id,
+    title: `${sevText} · ${log.medication_name}`,
+    body: `计划时间 ${log.scheduled_time}`,
+  };
+}
+
+/**
+ * 持久化 toast（最长 10 分钟），支持操作按钮
+ * @param {string|object} payload - 字符串则按旧版显示；对象则按新版带操作按钮
+ */
+function showMedicationToast(payload, durationMs = 60000) {
+  // 兼容旧调用
+  if (typeof payload === "string") {
+    payload = { kind: "text", text: payload };
+  }
+
+  let container = document.getElementById("med-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "med-toast-container";
+    container.className = "med-toast-container";
+    document.body.appendChild(container);
+  }
+
+  const el = document.createElement("div");
+  el.className = `med-toast med-toast-${payload.kind || "text"}`;
+
+  let html = "";
+  if (payload.kind === "reminder") {
+    html = `
+      <div class="med-toast-title">${escapeHtml(payload.title || "💊 用药提醒")}</div>
+      <div class="med-toast-body">${escapeHtml(payload.body || "")}</div>
+      <div class="med-toast-actions">
+        <button class="med-toast-btn med-toast-btn-primary" data-act="confirm" data-id="${escapeAttr(payload.logId)}">✅ 已服</button>
+        <button class="med-toast-btn" data-act="snooze" data-id="${escapeAttr(payload.logId)}">⏱ 10分钟</button>
+        <button class="med-toast-btn" data-act="skip" data-id="${escapeAttr(payload.logId)}">🚫 跳过</button>
+        <button class="med-toast-btn med-toast-btn-ghost" data-act="dismiss">✕</button>
+      </div>
+    `;
+  } else {
+    html = `<div class="med-toast-body">${escapeHtml(payload.text || "")}</div>`;
+  }
+  el.innerHTML = html;
+
+  // 绑定按钮
+  el.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === "dismiss") {
+      clearToast(el);
+      return;
+    }
+    try {
+      btn.disabled = true;
+      if (act === "confirm") {
+        await invoke("confirm_dose", { logId: btn.dataset.id });
+      } else if (act === "skip") {
+        await invoke("skip_dose", { logId: btn.dataset.id, reason: "通过主窗 toast 跳过" });
+      } else if (act === "snooze") {
+        await invoke("snooze_dose", { logId: btn.dataset.id, minutes: 10 });
+      }
+      clearToast(el);
+      await loadMedicationConfig();
+    } catch (err) {
+      console.error("Toast action failed:", err);
+      btn.disabled = false;
+    }
+  });
+
+  container.appendChild(el);
+  // 触发动画
+  requestAnimationFrame(() => el.classList.add("show"));
+
+  el._timer = setTimeout(() => clearToast(el), durationMs);
+  el.addEventListener("mouseenter", () => clearTimeout(el._timer));
+  el.addEventListener("mouseleave", () => {
+    el._timer = setTimeout(() => clearToast(el), durationMs);
+  });
+}
+
+function clearToast(el) {
+  if (!el || !el.parentNode) return;
+  clearTimeout(el._timer);
+  el.classList.remove("show");
+  setTimeout(() => el.parentNode && el.parentNode.removeChild(el), 300);
+}
+
+function startMedicationCountdown() {
+  setInterval(async () => {
+    if (medicationConfig && medicationConfig.enabled) {
+      // 仅在有 pending 时计算下次时间
+      const logs = medicationConfig.today_logs || [];
+      const next = logs
+        .filter((l) => l.status === "Pending")
+        .map((l) => l.scheduled_time)
+        .sort()[0];
+      const nextEl = document.getElementById("med-next-text");
+      if (next) {
+        if (nextEl) nextEl.textContent = next;
+      } else if (nextEl) {
+        nextEl.textContent = "今日计划已完成 🎉";
+      }
+    }
+  }, 30000);
 }
 
 // 全局函数：折叠区块

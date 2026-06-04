@@ -20,12 +20,15 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let pause = MenuItem::with_id(app, "pause", "暂停监控", true, None::<&str>)?;
     let rest = MenuItem::with_id(app, "rest", "给眼睛放个假", true, None::<&str>)?;
     let drink_water = MenuItem::with_id(app, "drink_water", "💧 已喝一杯水", true, None::<&str>)?;
+    let med_take = MenuItem::with_id(app, "med_take", "💊 已服药（下一项）", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
 
     let menu = Menu::with_items(
         app,
-        &[&pause, &rest, &drink_water, &sep1, &settings, &show, &sep2, &quit],
+        &[
+            &pause, &rest, &drink_water, &med_take, &sep1, &settings, &show, &sep2, &quit,
+        ],
     )?;
 
     let _tray = TrayIconBuilder::with_id("main-tray")
@@ -84,6 +87,38 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "drink_water" => {
                 let status = crate::water::record_drink(app, 250);
                 info!("Water recorded from tray: {}ml total", status.total_ml);
+            }
+            "med_take" => {
+                if let Some(state) = app.try_state::<crate::AppState>() {
+                    let pending = {
+                        if let Ok(config) = state.config.lock() {
+                            config
+                                .medication
+                                .today_logs
+                                .iter()
+                                .find(|l| {
+                                    use crate::config::DoseStatus;
+                                    l.status == DoseStatus::Pending
+                                })
+                                .map(|l| l.id.clone())
+                        } else {
+                            None
+                        }
+                    };
+                    if let Some(log_id) = pending {
+                        match crate::medication::confirm_dose(app, &log_id) {
+                            Ok(log) => {
+                                info!(
+                                    "Medication confirmed from tray: {}",
+                                    log.medication_name
+                                );
+                            }
+                            Err(e) => error!("Failed to confirm medication: {}", e),
+                        }
+                    } else {
+                        info!("No pending medication to confirm");
+                    }
+                }
             }
             _ => {}
         })

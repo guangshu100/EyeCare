@@ -105,9 +105,9 @@ main {
 }
 
 .info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
 }
 
 .info-item .label {
@@ -530,23 +530,41 @@ footer .btn {
 .status-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+}
+.status-row.status-row-main {
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  font-size: 13px;
+}
+.status-row > .status-indicator,
+.status-row > .info-item,
+.status-row > #toggle-pause {
+  flex-shrink: 0;
+}
+/* 弹性间隔：把"暂停"按钮推到最右 */
+.status-row-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.status-row.status-row-chips {
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-color);
 }
 
-.status-info-inline {
-  display: flex;
-  gap: 16px;
-  flex: 1;
-}
-
-.status-info-inline .info-item {
+.status-row .info-item {
   font-size: 13px;
   color: var(--text-light);
+  white-space: nowrap;
 }
 
-.status-info-inline .info-item b {
+.status-row .info-item #continuous-work-time {
   color: var(--text-color);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 快捷操作 */
@@ -1298,6 +1316,612 @@ footer {
   transition: border-color 0.2s;
 }
 
+/* ==================== 用药提醒 ==================== */
+.medication-config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.med-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(76,175,80,0.2);
+}
+
+.med-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.med-summary-label {
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.med-summary-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.med-progress {
+  width: 100%;
+  height: 6px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.med-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50, #66BB6A);
+  transition: width 0.3s ease;
+}
+
+.med-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.med-today,
+.med-list-section,
+.med-form-section,
+.med-general {
+  background: rgba(255,255,255,0.5);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.med-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 13px;
+  background: rgba(0,0,0,0.02);
+  border-radius: 6px;
+}
+
+/* 今日计划列表 */
+.med-today-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.med-log {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.7);
+  border-radius: 6px;
+  border-left: 3px solid #90A4AE;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.med-log-time {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--primary-color);
+}
+
+.med-log-name {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.med-log-note {
+  font-size: 11px;
+  color: var(--text-light);
+  display: block;
+  margin-top: 2px;
+}
+
+.med-log-status {
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.med-log-actions {
+  display: flex;
+  gap: 4px;
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.med-log-pending {
+  border-left-color: #FF9800;
+  background: rgba(255,152,0,0.06);
+}
+
+.med-log-taken {
+  border-left-color: #4CAF50;
+  background: rgba(76,175,80,0.06);
+  opacity: 0.85;
+}
+
+.med-log-skipped {
+  border-left-color: #9E9E9E;
+  background: rgba(158,158,158,0.06);
+  opacity: 0.7;
+}
+
+.med-log-delayed {
+  border-left-color: #2196F3;
+  background: rgba(33,150,243,0.06);
+}
+
+.med-log-missed {
+  border-left-color: #F44336;
+  background: rgba(244,67,54,0.06);
+}
+
+/* 药品列表 */
+.med-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.med-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.7);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.med-item:hover {
+  background: rgba(255,255,255,0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.med-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.med-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.med-item-title {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.med-item-dose {
+  font-size: 11px;
+  color: var(--text-light);
+  font-weight: 400;
+}
+
+.med-item-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-light);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.med-item-status {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.med-item-status.on {
+  background: rgba(76,175,80,0.15);
+  color: #2E7D32;
+}
+
+.med-item-status.off {
+  background: rgba(158,158,158,0.15);
+  color: #616161;
+}
+
+.med-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 按钮 */
+.med-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-color);
+  transition: all 0.15s;
+}
+
+.med-btn:hover {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.med-btn-primary {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.med-btn-primary:hover {
+  background: var(--secondary-color);
+  border-color: var(--secondary-color);
+}
+
+.med-btn-danger:hover {
+  background: var(--error-color);
+  border-color: var(--error-color);
+}
+
+/* 表单 */
+.med-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.med-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.med-form-row label {
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.med-form-row input,
+.med-form-row select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(255,255,255,0.8);
+  transition: border-color 0.2s;
+}
+
+.med-form-row input:focus,
+.med-form-row select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.med-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.med-form-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.med-form-grid label {
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.med-form-grid input,
+.med-form-grid select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(255,255,255,0.8);
+  width: 100%;
+}
+
+.med-form-grid input[type="color"] {
+  padding: 2px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.med-form-actions {
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Toast 通知 */
+.med-toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.med-toast {
+  pointer-events: auto;
+  min-width: 280px;
+  max-width: 360px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #1f2937;
+  padding: 12px 14px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  transform: translateX(380px);
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+  font-size: 13px;
+  border-left: 4px solid #4CAF50;
+}
+
+.med-toast.show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.med-toast-reminder {
+  border-left-color: #FF9800;
+  background: linear-gradient(135deg, #fff8e1, #ffffff);
+}
+
+.med-toast-stock {
+  border-left-color: #2196F3;
+}
+
+.med-toast-text {
+  border-left-color: #4CAF50;
+}
+
+.med-toast-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: #111;
+}
+
+.med-toast-body {
+  font-size: 12px;
+  color: #555;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.med-toast-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.med-toast-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.med-toast-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.med-toast-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.med-toast-btn-primary {
+  background: #4CAF50;
+  color: #fff;
+  border-color: #4CAF50;
+}
+
+.med-toast-btn-primary:hover {
+  background: #43A047;
+  border-color: #43A047;
+}
+
+.med-toast-btn-ghost {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 16px;
+  padding: 2px 6px;
+}
+
+.med-toast-btn-ghost:hover {
+  background: transparent;
+  color: #374151;
+}
+
+/* 兼容旧版本单 toast 的样式 */
+#med-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 24px;
+  font-size: 13px;
+  z-index: 9999;
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+#med-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ==================== 喝水 Toast ==================== */
+.water-toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  max-width: 380px;
+}
+
+.water-toast {
+  pointer-events: auto;
+  display: flex;
+  gap: 12px;
+  background: linear-gradient(135deg, #E3F2FD 0%, #ffffff 100%);
+  color: #0d47a1;
+  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(33, 150, 243, 0.18), 0 0 0 1px rgba(33, 150, 243, 0.1);
+  transform: translateX(420px);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+  border-left: 5px solid #2196F3;
+  min-width: 300px;
+}
+
+.water-toast.show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.water-toast-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+  align-self: center;
+  animation: water-droplet 1.5s ease-in-out infinite;
+}
+
+@keyframes water-droplet {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.water-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.water-toast-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #0d47a1;
+  margin-bottom: 2px;
+}
+
+.water-toast-msg {
+  font-size: 12px;
+  color: #1565c0;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.water-toast-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.water-toast-btn {
+  border: 1px solid #bbdefb;
+  background: #fff;
+  color: #1565c0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.water-toast-btn:hover {
+  background: #e3f2fd;
+  border-color: #64b5f6;
+}
+
+.water-toast-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.water-toast-btn-primary {
+  background: #2196F3;
+  color: #fff;
+  border-color: #2196F3;
+}
+
+.water-toast-btn-primary:hover {
+  background: #1976D2;
+  border-color: #1976D2;
+}
+
+.water-toast-btn-ghost {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #90a4ae;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.water-toast-btn-ghost:hover {
+  background: transparent;
+  color: #1565c0;
+}
+
 .pet-rename-input:focus {
   outline: none;
   border-color: var(--primary-color);
@@ -1514,6 +2138,159 @@ footer {
 .water-next-reminder {
   font-size: 12px;
   color: var(--text-light);
+}
+
+/* ==================== 接下来 芯片（下行） ==================== */
+.upcoming-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: rgba(71, 132, 132, 0.08);
+  font-size: 12px;
+  color: var(--text-color);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  cursor: default;
+  line-height: 1.2;
+}
+.upcoming-chip:hover {
+  background: rgba(71, 132, 132, 0.14);
+  transform: translateY(-1px);
+}
+.upcoming-chip.hidden {
+  display: none;
+}
+.chip-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.chip-name {
+  font-size: 11px;
+  color: var(--text-light);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ==================== 喝水居中 Modal ==================== */
+.water-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: auto;
+}
+.water-modal-overlay.show {
+  opacity: 1;
+}
+.water-modal {
+  width: 380px;
+  background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%);
+  color: #fff;
+  border-radius: 18px;
+  padding: 28px 24px 18px;
+  box-shadow: 0 24px 60px rgba(33, 150, 243, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15);
+  text-align: center;
+  transform: scale(0.85) translateY(20px);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.water-modal-overlay.show .water-modal {
+  transform: scale(1) translateY(0);
+}
+.water-modal-icon {
+  font-size: 56px;
+  line-height: 1;
+  margin-bottom: 8px;
+  animation: water-pulse 2s ease-in-out infinite;
+}
+@keyframes water-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.water-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.water-modal-msg {
+  font-size: 14px;
+  line-height: 1.6;
+  opacity: 0.95;
+  margin-bottom: 14px;
+  word-break: break-word;
+}
+.water-modal-actions {
+  display: flex;
+  gap: 8px;
+}
+.water-modal-btn {
+  flex: 1;
+  border: none;
+  padding: 10px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.water-modal-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+.water-modal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.water-modal-btn-primary {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1565C0;
+}
+.water-modal-btn-primary:hover:not(:disabled) {
+  background: #fff;
+}
+.water-modal-btn-ghost {
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 500;
+}
+.upcoming-chip.soon {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+}
+.upcoming-chip.soon .chip-name {
+  color: #bf6c00;
+}
+.upcoming-chip.soon .chip-time {
+  color: #e65100;
+}
+.upcoming-chip.urgent {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  box-shadow: 0 2px 6px rgba(245, 124, 0, 0.35);
+  animation: chip-pulse 1.6s ease-in-out infinite;
+}
+.upcoming-chip.urgent .chip-name {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+}
+.upcoming-chip.urgent .chip-time {
+  color: #ffffff;
+  font-weight: 700;
+}
+@keyframes chip-pulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(245, 124, 0, 0.35); }
+  50%      { box-shadow: 0 2px 12px rgba(245, 124, 0, 0.6); }
 }
 
 /* 响应式 */

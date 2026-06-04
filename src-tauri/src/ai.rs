@@ -179,6 +179,41 @@ const FORCED_REST_TIPS: &[&str] = &[
     "研究表明：规律休息可以提高30%的工作效率，忍一下！",
 ];
 
+// 用药提醒文案（按 severity 1-4）
+const MED_REMINDER: &[(&str, u32)] = &[
+    ("💊 {name} 时间到～记得按时服用哦", 1),
+    ("💊 该吃{name}啦，别忘了哦", 1),
+    ("{name}时间到啦～配温水服用更佳", 1),
+    ("💊 亲，{name}该吃啦", 2),
+    ("别忘了吃{name}哦～保持规律很重要", 2),
+    ("💊 您的{name}正在等您服用", 2),
+    ("⚠️ {name}还没吃，请尽快服用", 3),
+    ("{name}已经等了好一会儿了，尽快补上吧", 3),
+    ("⚠️ 健康提醒：{name}该吃了", 3),
+    ("🔴 {name}已超时未服用，请立即处理", 4),
+    ("🔴 重要：{name}超过30分钟未服用", 4),
+    ("🔴 {name}延误严重，建议尽快补服", 4),
+];
+
+const MED_TAKEN: &[&str] = &[
+    "按时吃药，棒棒哒！",
+    "已记录，继续保持～",
+    "乖乖吃药，元气满满！",
+    "服药完成，给你点赞👍",
+    "好习惯！今天又完成一次",
+    "辛苦啦，记得配水哦～",
+    "坚持就是胜利！",
+    "提醒已被你打败 ✨",
+];
+
+const MED_SKIPPED: &[&str] = &[
+    "没关系，下次记得哦～",
+    "偶尔忘记很正常，别担心",
+    "已记录，明天再接再厉",
+    "健康不能停，下次注意",
+    "为身体负责，下次按时吧",
+];
+
 // ==================== AI Cache ====================
 
 struct AiCache {
@@ -536,6 +571,46 @@ pub fn get_tray_message(eye_health: u32) -> String {
     } else {
         TRAY_MESSAGES[seed % TRAY_MESSAGES.len()].0.to_string()
     }
+}
+
+/// 用药提醒文案（按 severity 选取）
+pub fn get_medication_reminder(med_name: &str, severity: u32) -> String {
+    use std::time::SystemTime;
+    let seed = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as usize)
+        .unwrap_or(0);
+
+    let sev = severity.clamp(1, 4);
+    let matches: Vec<_> = MED_REMINDER.iter()
+        .filter(|(_, s)| *s == sev)
+        .collect();
+    let template = if matches.is_empty() {
+        MED_REMINDER[seed % MED_REMINDER.len()].0
+    } else {
+        matches[seed % matches.len()].0
+    };
+    template.replace("{name}", med_name)
+}
+
+/// 用药确认文案
+pub fn get_medication_taken_message() -> String {
+    use std::time::SystemTime;
+    let seed = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as usize)
+        .unwrap_or(0);
+    MED_TAKEN[seed % MED_TAKEN.len()].to_string()
+}
+
+/// 用药跳过文案
+pub fn get_medication_skipped_message() -> String {
+    use std::time::SystemTime;
+    let seed = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as usize)
+        .unwrap_or(0);
+    MED_SKIPPED[seed % MED_SKIPPED.len()].to_string()
 }
 
 fn build_severity_prompt(template: &str, context: &GenerateContext) -> String {

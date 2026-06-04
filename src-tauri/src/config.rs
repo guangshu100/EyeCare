@@ -26,6 +26,199 @@ pub struct AppConfig {
     pub water: WaterConfig,
     #[serde(default)]
     pub whitelist_apps: Vec<String>,
+    #[serde(default)]
+    pub medication: MedicationConfig,
+}
+
+// ==================== 用药提醒配置 ====================
+
+/// 药品剂型
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub enum MedicationForm {
+    Tablet,        // 片剂
+    Capsule,       // 胶囊
+    EyeDrop,       // 眼药水
+    OralLiquid,    // 口服液
+    Injection,     // 注射液
+    Cream,         // 药膏
+    Patch,         // 贴片
+    Powder,        // 冲剂
+    Spray,         // 喷雾
+    Other,         // 其他
+}
+
+impl Default for MedicationForm {
+    fn default() -> Self {
+        MedicationForm::Tablet
+    }
+}
+
+/// 与进餐的关系
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub enum MealRelation {
+    BeforeMeal,    // 饭前
+    AfterMeal,     // 饭后
+    WithMeal,      // 随餐
+    EmptyStomach,  // 空腹
+    BeforeSleep,   // 睡前
+    AnyTime,       // 不限
+}
+
+impl Default for MealRelation {
+    fn default() -> Self {
+        MealRelation::AnyTime
+    }
+}
+
+/// 服药记录中的剂量状态
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub enum DoseStatus {
+    Pending,   // 待服药
+    Taken,     // 已服用
+    Skipped,   // 已跳过
+    Delayed,   // 延迟服用
+    Missed,    // 错过
+}
+
+impl Default for DoseStatus {
+    fn default() -> Self {
+        DoseStatus::Pending
+    }
+}
+
+/// 单个服药时间点
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct ScheduleTime {
+    pub hour: u32,
+    pub minute: u32,
+    pub label: String,
+}
+
+/// 药品的排程信息
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct MedicationSchedule {
+    pub times: Vec<ScheduleTime>,
+    #[serde(default)]
+    pub relation: MealRelation,
+    /// 每周哪几天（1=周一..7=周日），空=每天
+    #[serde(default)]
+    pub days: Vec<u32>,
+    #[serde(default)]
+    pub start_date: String,
+    #[serde(default)]
+    pub end_date: Option<String>,
+}
+
+/// 单个药品定义
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct Medication {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub generic_name: String,
+    #[serde(default)]
+    pub dosage: String,
+    #[serde(default)]
+    pub form: MedicationForm,
+    #[serde(default)]
+    pub unit: String,
+    #[serde(default)]
+    pub quantity_per_dose: f32,
+    #[serde(default)]
+    pub schedule: MedicationSchedule,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub color: String,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub stock_remaining: Option<f32>,
+    #[serde(default)]
+    pub stock_alert_threshold: f32,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// 自定义频率小时数（>0 时覆盖 times 排程）
+    #[serde(default)]
+    pub interval_hours: u32,
+}
+
+/// 今日某个计划服药条目（实际触发后产生）
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct MedicationLog {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub medication_id: String,
+    #[serde(default)]
+    pub medication_name: String,
+    #[serde(default)]
+    pub scheduled_time: String,
+    #[serde(default)]
+    pub actual_time: Option<String>,
+    #[serde(default)]
+    pub status: DoseStatus,
+    #[serde(default)]
+    pub skipped_reason: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
+    #[serde(default)]
+    pub severity: u32,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct MedicationConfig {
+    pub enabled: bool,
+    pub notifications_enabled: bool,
+    pub sound_enabled: bool,
+    pub confirm_required: bool,
+    pub escalation_minutes: u32,
+    pub daily_report_enabled: bool,
+    pub weekly_report_day: u32,
+    pub medications: Vec<Medication>,
+    /// 今日所有计划服药条目（按计划时间排序）
+    #[serde(default)]
+    pub today_logs: Vec<MedicationLog>,
+    /// 最近一次库存预警信息
+    #[serde(default)]
+    pub last_stock_alert: Option<String>,
+}
+
+impl MedicationConfig {
+    /// 重置每日状态（午夜调用）
+    pub fn reset_daily(&mut self) {
+        self.today_logs.clear();
+    }
+
+    /// 查找药品
+    pub fn find_medication(&self, id: &str) -> Option<&Medication> {
+        self.medications.iter().find(|m| m.id == id)
+    }
+
+    pub fn find_medication_mut(&mut self, id: &str) -> Option<&mut Medication> {
+        self.medications.iter_mut().find(|m| m.id == id)
+    }
+
+    /// 计算今日依从性（0-100）
+    pub fn adherence_today(&self) -> u32 {
+        if self.today_logs.is_empty() {
+            return 100;
+        }
+        let total = self.today_logs.len() as u32;
+        let taken = self.today_logs.iter()
+            .filter(|l| l.status == DoseStatus::Taken || l.status == DoseStatus::Delayed)
+            .count() as u32;
+        (taken * 100 / total).min(100)
+    }
 }
 
 // ==================== 喝水提醒配置 ====================
@@ -255,6 +448,7 @@ impl Default for AppConfig {
             pet: PetData::default(),
             ai: AiConfig::default(),
             water: WaterConfig::default(),
+            medication: MedicationConfig::default(),
             whitelist_apps: vec![
                 "腾讯会议".to_string(),
                 "zoom".to_string(),
@@ -349,6 +543,7 @@ impl AppConfig {
                 config.skip_count_today = 0;
                 config.last_date = today;
                 config.water.check_and_reset_daily();
+                config.medication.reset_daily();
                 let _ = config.save_silent();
             }
 
@@ -372,7 +567,7 @@ impl AppConfig {
         Ok(())
     }
 
-    fn save_silent(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_silent(&self) -> Result<(), Box<dyn std::error::Error>> {
         let path = Self::config_path();
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);

@@ -36,18 +36,35 @@
     </header>
     
     <main>
-      <!-- 状态卡片 - 最醒目放顶部 -->
+      <!-- 状态卡片 - 上行：状态/工作/暂停；下行：三个倒计时芯片 -->
       <section class="card status-card">
-        <div class="status-row">
-          <div class="status-indicator">
+        <div class="status-row status-row-main">
+          <span class="status-indicator">
             <span id="status-dot" class="dot active"></span>
             <span id="status-text">运行中</span>
-          </div>
-          <div class="status-info-inline">
-            <span class="info-item"><b>连续工作:</b> <span id="continuous-work-time">0秒</span></span>
-            <span class="info-item"><b>下次提醒:</b> <span id="next-reminder">--</span></span>
-          </div>
+          </span>
+          <span class="info-item">
+            连续工作: <span id="continuous-work-time">0秒</span>
+          </span>
+          <span class="status-row-spacer"></span>
           <button id="toggle-pause" class="btn btn-secondary btn-small">暂停</button>
+        </div>
+        <div class="status-row status-row-chips" id="upcoming-chips">
+          <span class="upcoming-chip" data-type="rest" id="upcoming-rest" title="下一次休息">
+            <span class="chip-icon">🛋️</span>
+            <span class="chip-name">休息</span>
+            <span class="chip-time" id="upcoming-rest-time">--</span>
+          </span>
+          <span class="upcoming-chip" data-type="water" id="upcoming-water" title="下一次喝水">
+            <span class="chip-icon">💧</span>
+            <span class="chip-name">喝水</span>
+            <span class="chip-time" id="upcoming-water-time">--</span>
+          </span>
+          <span class="upcoming-chip" data-type="medication" id="upcoming-medication" title="下一次吃药">
+            <span class="chip-icon">💊</span>
+            <span class="chip-name" id="upcoming-medication-name">用药</span>
+            <span class="chip-time" id="upcoming-medication-time">--</span>
+          </span>
         </div>
       </section>
 
@@ -232,6 +249,182 @@
                 <div class="setting-control">
                   <input type="range" id="water-cup-general" min="100" max="500" step="50" value="250">
                   <span id="water-cup-general-value">250ml</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 用药提醒 -->
+      <section class="card collapsible">
+        <h2 class="collapsible-header expanded">
+          💊 用药提醒 <span class="toggle-icon">▼</span>
+        </h2>
+        <div id="medication-section" class="collapsible-content expanded">
+          <div class="settings-compact">
+            <div class="setting-row checkbox-row">
+              <label><input type="checkbox" id="medication-enabled"> 启用用药提醒</label>
+            </div>
+            <div id="medication-config" class="medication-config hidden">
+              <!-- 顶部：依从性 + 今日进度 -->
+              <div class="med-summary">
+                <div class="med-summary-item">
+                  <span class="med-summary-label">今日依从性</span>
+                  <div class="med-progress">
+                    <div class="med-progress-fill" id="med-adherence-fill" style="width:0%"></div>
+                  </div>
+                  <span class="med-summary-value" id="med-adherence-value">0%</span>
+                </div>
+                <div class="med-summary-item">
+                  <span class="med-summary-label">下次用药</span>
+                  <span class="med-summary-value" id="med-next-text">暂无</span>
+                </div>
+              </div>
+
+              <!-- 今日计划 -->
+              <div class="med-today">
+                <h3 class="med-section-title">📋 今日用药计划</h3>
+                <div id="med-today-list" class="med-today-list">
+                  <div class="med-empty">还没有药品，添加一个开始吧 👇</div>
+                </div>
+              </div>
+
+              <!-- 药品列表 -->
+              <div class="med-list-section">
+                <h3 class="med-section-title">💊 我的药品</h3>
+                <div id="med-list" class="med-list">
+                  <div class="med-empty">尚未添加药品</div>
+                </div>
+              </div>
+
+              <!-- 添加/编辑表单 -->
+              <div class="med-form-section">
+                <h3 class="med-section-title" id="med-form-title">➕ 添加药品</h3>
+                <form id="med-form" class="med-form">
+                  <input type="hidden" id="med-id">
+                  <div class="med-form-row">
+                    <label>名称 *</label>
+                    <input type="text" id="med-name" placeholder="如：氨氯地平" required>
+                  </div>
+                  <div class="med-form-grid">
+                    <div>
+                      <label>剂型</label>
+                      <select id="med-form">
+                        <option value="Tablet">片剂</option>
+                        <option value="Capsule">胶囊</option>
+                        <option value="EyeDrop">眼药水</option>
+                        <option value="OralLiquid">口服液</option>
+                        <option value="Injection">注射液</option>
+                        <option value="Cream">药膏</option>
+                        <option value="Patch">贴片</option>
+                        <option value="Powder">冲剂</option>
+                        <option value="Spray">喷雾</option>
+                        <option value="Other">其他</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>剂量</label>
+                      <input type="text" id="med-dosage" placeholder="如：5mg">
+                    </div>
+                  </div>
+                  <div class="med-form-grid">
+                    <div>
+                      <label>每次用量</label>
+                      <input type="number" id="med-quantity" min="0" step="0.5" value="1">
+                    </div>
+                    <div>
+                      <label>单位</label>
+                      <input type="text" id="med-unit" value="片">
+                    </div>
+                  </div>
+                  <div class="med-form-grid">
+                    <div>
+                      <label>服药时间 1</label>
+                      <input type="time" id="med-time-1" value="08:00">
+                    </div>
+                    <div>
+                      <label>标签</label>
+                      <input type="text" id="med-time-label-1" value="早餐后">
+                    </div>
+                  </div>
+                  <div class="med-form-grid">
+                    <div>
+                      <label>服药时间 2</label>
+                      <input type="time" id="med-time-2" value="">
+                    </div>
+                    <div>
+                      <label>标签</label>
+                      <input type="text" id="med-time-label-2" value="">
+                    </div>
+                  </div>
+                  <div class="med-form-grid">
+                    <div>
+                      <label>服药时间 3</label>
+                      <input type="time" id="med-time-3" value="">
+                    </div>
+                    <div>
+                      <label>标签</label>
+                      <input type="text" id="med-time-label-3" value="">
+                    </div>
+                  </div>
+                  <div class="med-form-row">
+                    <label>与餐关系</label>
+                    <select id="med-relation">
+                      <option value="AfterMeal">饭后</option>
+                      <option value="BeforeMeal">饭前</option>
+                      <option value="WithMeal">随餐</option>
+                      <option value="EmptyStomach">空腹</option>
+                      <option value="BeforeSleep">睡前</option>
+                      <option value="AnyTime">不限</option>
+                    </select>
+                  </div>
+                  <div class="med-form-grid">
+                    <div>
+                      <label>图标</label>
+                      <input type="text" id="med-icon" value="💊" maxlength="2">
+                    </div>
+                    <div>
+                      <label>颜色</label>
+                      <input type="color" id="med-color" value="#4CAF50">
+                    </div>
+                  </div>
+                  <div class="med-form-grid">
+                    <div>
+                      <label>库存（可选）</label>
+                      <input type="number" id="med-stock" min="0" step="0.5" placeholder="如：30">
+                    </div>
+                    <div>
+                      <label>库存预警阈值</label>
+                      <input type="number" id="med-stock-threshold" min="0" step="0.5" value="7">
+                    </div>
+                  </div>
+                  <div class="med-form-row">
+                    <label>备注</label>
+                    <input type="text" id="med-notes" placeholder="如：饭后服用，不可突然停药">
+                  </div>
+                  <div class="med-form-row med-form-actions">
+                    <button type="button" class="btn btn-secondary" id="med-cancel-btn" style="display:none">取消</button>
+                    <button type="submit" class="btn btn-primary" id="med-save-btn">保存</button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- 通用设置 -->
+              <div class="med-general">
+                <h3 class="med-section-title">⚙️ 通用设置</h3>
+                <div class="setting-row">
+                  <label>升级提醒间隔（分钟）</label>
+                  <div class="setting-control">
+                    <input type="range" id="med-escalation" min="5" max="60" value="30">
+                    <span id="med-escalation-value">30分钟</span>
+                  </div>
+                </div>
+                <div class="setting-row checkbox-row">
+                  <label><input type="checkbox" id="med-notify" checked> 发送系统通知</label>
+                </div>
+                <div class="setting-row checkbox-row">
+                  <label><input type="checkbox" id="med-confirm" checked> 需要确认服药</label>
                 </div>
               </div>
             </div>

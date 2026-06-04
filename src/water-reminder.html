@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💧 喝水提醒</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%);
+    color: #fff;
+    width: 420px;
+    height: 320px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-app-region: no-drag;
+    border-radius: 16px;
+    margin: 0;
+    padding: 0;
+  }
+  .header {
+    -webkit-app-region: drag;
+    display: flex;
+    align-items: center;
+    padding: 14px 18px 6px;
+    gap: 12px;
+  }
+  .icon-circle {
+    width: 52px;
+    height: 52px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+  .title-block { flex: 1; min-width: 0; }
+  .water-title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .water-subtitle {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-top: 2px;
+  }
+  .close-btn {
+    -webkit-app-region: no-drag;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: background 0.2s;
+  }
+  .close-btn:hover { background: rgba(255,255,255,0.35); }
+  .body {
+    flex: 1;
+    padding: 6px 18px 12px;
+    overflow: hidden;
+  }
+  .message {
+    font-size: 14px;
+    line-height: 1.6;
+    opacity: 0.95;
+  }
+  .meta {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .meta-chip {
+    background: rgba(255,255,255,0.18);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+  .footer {
+    -webkit-app-region: no-drag;
+    padding: 10px 14px 14px;
+    display: flex;
+    gap: 8px;
+    background: rgba(0,0,0,0.12);
+  }
+  .btn {
+    flex: 1;
+    border: none;
+    padding: 10px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .btn-primary {
+    background: rgba(255,255,255,0.95);
+    color: #1565C0;
+  }
+  .btn-primary:hover { background: #fff; transform: translateY(-1px); }
+  .btn-ghost {
+    background: rgba(255,255,255,0.2);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.3); }
+  .countdown-bar {
+    height: 3px;
+    background: rgba(255,255,255,0.3);
+    overflow: hidden;
+  }
+  .countdown-fill {
+    height: 100%;
+    background: #fff;
+    width: 100%;
+    transition: width 1s linear;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="icon-circle">💧</div>
+    <div class="title-block">
+      <div class="water-title" id="water-title">喝水时间到</div>
+      <div class="water-subtitle" id="water-subtitle">保持水分，精力充沛</div>
+    </div>
+    <button class="close-btn" id="close-btn" title="关闭">×</button>
+  </div>
+
+  <div class="body">
+    <div class="message" id="message">该喝水啦～</div>
+    <div class="meta">
+      <span class="meta-chip" id="meta-amount">🥤 250ml</span>
+      <span class="meta-chip" id="meta-progress">📊 今日 0/8 杯</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="btn btn-primary" id="btn-drink">🥤 喝了一杯</button>
+    <button class="btn btn-ghost" id="btn-half">💧 半杯</button>
+    <button class="btn btn-ghost" id="btn-dismiss">✕ 稍后</button>
+  </div>
+
+  <div class="countdown-bar">
+    <div class="countdown-fill" id="countdown-fill"></div>
+  </div>
+
+<script>
+(function() {
+  // 详细诊断日志
+  console.log("[water-reminder] Page loaded, URL:", window.location.href);
+  console.log("[water-reminder] __TAURI__ available:", !!window.__TAURI__);
+  if (window.__TAURI__) {
+    console.log("[water-reminder] __TAURI__.core:", !!window.__TAURI__.core);
+    console.log("[water-reminder] __TAURI__.webviewWindow:", !!window.__TAURI__.webviewWindow);
+  }
+
+  try {
+    // 解析 URL 参数
+    const params = new URLSearchParams(window.location.search);
+    const title = params.get("title") || "💧 喝水提醒";
+    const body = params.get("body") || "该喝水啦～";
+    const amount = params.get("amount") || "250ml";
+    const progress = params.get("progress") || "0/8";
+    console.log("[water-reminder] Params parsed:", { title, body, amount, progress });
+
+    // 填充内容
+    document.getElementById("water-title").textContent = title;
+    document.getElementById("message").textContent = body;
+    document.getElementById("meta-amount").textContent = "🥤 " + amount;
+    document.getElementById("meta-progress").textContent = "📊 今日 " + progress + " 杯";
+    console.log("[water-reminder] Content rendered");
+
+    // 90 秒倒计时进度条
+    let total = 90, left = total;
+    const fill = document.getElementById("countdown-fill");
+    setInterval(function() {
+      left -= 1;
+      if (left <= 0) { fill.style.width = "0%"; }
+      else fill.style.width = (left / total * 100) + "%";
+    }, 1000);
+
+    // Tauri API 调用
+    function getInvoke() {
+      return window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+    }
+    function getCurrentWin() {
+      return window.__TAURI__ && window.__TAURI__.webviewWindow && window.__TAURI__.webviewWindow.getCurrentWebviewWindow;
+    }
+
+    function closeWindow() {
+      console.log("[water-reminder] closeWindow called");
+      const win = getCurrentWin();
+      if (win) {
+        try { win().close().catch(function(e) { console.error("[water-reminder] close error:", e); }); return; }
+        catch(e) { console.error("[water-reminder] close throw:", e); }
+      }
+      // 兜底：使用 window.close
+      console.log("[water-reminder] fallback to window.close()");
+      try { window.close(); } catch(e) { console.error("[water-reminder] window.close throw:", e); }
+    }
+
+    // 按钮事件
+    document.getElementById("btn-drink").addEventListener("click", async function() {
+      console.log("[water-reminder] btn-drink clicked");
+      const invoke = getInvoke();
+      if (invoke) {
+        try { await invoke("drink_one_cup"); console.log("[water-reminder] drink_one_cup ok"); }
+        catch(e) { console.error("[water-reminder] drink_one_cup failed:", e); }
+      } else {
+        console.warn("[water-reminder] invoke not available");
+      }
+      closeWindow();
+    });
+
+    document.getElementById("btn-half").addEventListener("click", async function() {
+      console.log("[water-reminder] btn-half clicked");
+      const invoke = getInvoke();
+      const cupMl = parseInt(params.get("cup_ml") || "250", 10);
+      if (invoke) {
+        try { await invoke("record_water_intake", { ml: Math.round(cupMl / 2) }); console.log("[water-reminder] record_water_intake ok"); }
+        catch(e) { console.error("[water-reminder] record_water_intake failed:", e); }
+      } else {
+        console.warn("[water-reminder] invoke not available");
+      }
+      closeWindow();
+    });
+
+    document.getElementById("btn-dismiss").addEventListener("click", function() { console.log("[water-reminder] btn-dismiss"); closeWindow(); });
+    document.getElementById("close-btn").addEventListener("click", function() { console.log("[water-reminder] close-btn"); closeWindow(); });
+
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") { console.log("[water-reminder] ESC pressed"); closeWindow(); }
+    });
+
+    console.log("[water-reminder] All event listeners attached");
+  } catch (e) {
+    console.error("[water-reminder] FATAL initialization error:", e);
+    // 失败时在 body 显示错误信息（避免白屏）
+    document.body.innerHTML = '<div style="padding:20px;color:#fff;font-size:14px">初始化失败: ' + e.message + '</div>';
+  }
+})();
+</script>
+</body>
+</html>

@@ -28,9 +28,6 @@ static NATURAL_BREAK_THRESHOLD_SECS: u64 = 20;
 /// Track if user was on natural break in previous check
 static WAS_ON_NATURAL_BREAK: AtomicBool = AtomicBool::new(false);
 
-/// Track if currently in whitelist app (no reminder when true)
-static IN_WHITELIST_APP: AtomicBool = AtomicBool::new(false);
-
 /// Cached pet data for Status emission (updated periodically)
 static PET_CACHE: Mutex<Option<PetData>> = Mutex::new(None);
 
@@ -371,7 +368,7 @@ pub fn get_total_skipped_seconds() -> u64 {
 }
 
 pub fn is_in_whitelist_app() -> bool {
-    IN_WHITELIST_APP.load(Ordering::SeqCst)
+    crate::whitelist::is_in_whitelist()
 }
 
 pub fn is_paused() -> bool {
@@ -383,64 +380,9 @@ pub fn get_work_threshold() -> u64 {
     30 * 60 // default, will be overridden by config
 }
 
-/// Check if whitelist apps are running (Windows)
-#[cfg(target_os = "windows")]
-fn check_whitelist_apps(app_handle: &AppHandle) -> bool {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
-
-    unsafe {
-        let hwnd: HWND = GetForegroundWindow();
-        if hwnd.0.is_null() {
-            return false;
-        }
-
-        let mut process_id: u32 = 0;
-        GetWindowThreadProcessId(hwnd, Some(&mut process_id));
-
-        // Get whitelist from config
-        if let Some(state) = app_handle.try_state::<crate::AppState>() {
-            if let Ok(config) = state.config.lock() {
-                let whitelist = &config.whitelist_apps;
-                if whitelist.is_empty() {
-                    return false;
-                }
-
-                // Get process name by PID (simplified - in production would use PSAPI)
-                // For now, we'll check against known meeting app window titles
-                let mut title_buf = [0u16; 260];
-                let len = windows::Win32::UI::WindowsAndMessaging::GetWindowTextW(
-                    hwnd,
-                    &mut title_buf,
-                );
-
-                if len > 0 {
-                    let title = String::from_utf16_lossy(&title_buf[..len as usize]);
-                    let title_lower = title.to_lowercase();
-
-                    for app in whitelist {
-                        let app_lower = app.to_lowercase();
-                        // Check if window title contains the whitelist app name
-                        if title_lower.contains(&app_lower) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    false
-}
-
-#[cfg(not(target_os = "windows"))]
-fn check_whitelist_apps(_app_handle: &AppHandle) -> bool {
-    false
-}
-
 /// Update tray tooltip with countdown
 fn update_tray_tooltip(app_handle: &AppHandle, continuous_work: u64, threshold: u64) {
-    let in_whitelist = check_whitelist_apps(app_handle);
-    IN_WHITELIST_APP.store(in_whitelist, Ordering::SeqCst);
+    let in_whitelist = crate::whitelist::check(app_handle);
 
     let eye_health = EYE_HEALTH.load(Ordering::SeqCst);
 
@@ -655,8 +597,7 @@ pub fn start_monitoring(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
             }
 
             // ---- 白名单检测 ----
-            let in_whitelist = check_whitelist_apps(&app_handle);
-            IN_WHITELIST_APP.store(in_whitelist, Ordering::SeqCst);
+            let in_whitelist = crate::whitelist::check(&app_handle);
 
             // ---- Step 1: 连续工作达到阈值 -> send notification ----
             if continuous_work >= work_threshold_secs

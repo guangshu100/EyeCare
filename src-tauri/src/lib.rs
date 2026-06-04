@@ -12,6 +12,8 @@ mod ai;
 mod tray;
 mod crypto;
 mod water;
+mod medication;
+mod whitelist;
 
 pub struct AppState {
     pub config: Mutex<config::AppConfig>,
@@ -313,6 +315,94 @@ fn drink_one_cup(app: tauri::AppHandle) -> water::WaterStatus {
     water::record_drink(&app, cup_size)
 }
 
+// ==================== 用药提醒命令 ====================
+
+#[tauri::command]
+fn get_medication_config(state: State<AppState>) -> config::MedicationConfig {
+    state.config.lock().unwrap().medication.clone()
+}
+
+#[tauri::command]
+fn save_medication_config(
+    state: State<AppState>,
+    new_config: config::MedicationConfig,
+) -> Result<(), String> {
+    let mut cfg = state.config.lock().unwrap();
+    cfg.medication = new_config;
+    cfg.save_silent().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn add_medication(
+    app: tauri::AppHandle,
+    medication: config::Medication,
+) -> Result<config::Medication, String> {
+    medication::add_medication(&app, medication)
+}
+
+#[tauri::command]
+fn update_medication(
+    app: tauri::AppHandle,
+    medication: config::Medication,
+) -> Result<config::Medication, String> {
+    medication::update_medication(&app, medication)
+}
+
+#[tauri::command]
+fn delete_medication(app: tauri::AppHandle, medication_id: String) -> Result<(), String> {
+    medication::delete_medication(&app, &medication_id)
+}
+
+#[tauri::command]
+fn confirm_dose(
+    app: tauri::AppHandle,
+    log_id: String,
+) -> Result<config::MedicationLog, String> {
+    let result = medication::confirm_dose(&app, &log_id)?;
+    // 关闭用药提醒窗口
+    for (label, win) in app.webview_windows() {
+        if label.starts_with("med-reminder") || label.starts_with("medication-reminder") {
+            let _ = win.close();
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn skip_dose(
+    app: tauri::AppHandle,
+    log_id: String,
+    reason: Option<String>,
+) -> Result<config::MedicationLog, String> {
+    let result = medication::skip_dose(
+        &app,
+        &log_id,
+        Some(reason.unwrap_or_else(|| "用户跳过".to_string())),
+    )?;
+    for (label, win) in app.webview_windows() {
+        if label.starts_with("med-reminder") || label.starts_with("medication-reminder") {
+            let _ = win.close();
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn snooze_dose(app: tauri::AppHandle, log_id: String, minutes: u32) -> Result<(), String> {
+    medication::snooze_dose(&app, &log_id, minutes)?;
+    for (label, win) in app.webview_windows() {
+        if label.starts_with("med-reminder") || label.starts_with("medication-reminder") {
+            let _ = win.close();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn test_water_reminder(app: tauri::AppHandle) {
+    water::test_water_reminder(&app);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -404,6 +494,18 @@ pub fn run() {
             info!("EyeCare setup completed");
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                let label = window.label();
+                if label.starts_with("water-reminder") {
+                    info!("Water reminder window destroyed, notifying frontend to close modal");
+                    let _ = window.app_handle().emit("water-reminder-closed", ());
+                } else if label.starts_with("med-reminder") || label.starts_with("medication-reminder") {
+                    info!("Medication reminder window destroyed, notifying frontend to close toast");
+                    let _ = window.app_handle().emit("medication-reminder-closed", ());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
@@ -427,6 +529,16 @@ pub fn run() {
             get_water_status,
             record_water_intake,
             drink_one_cup,
+            test_water_reminder,
+            // 用药提醒
+            get_medication_config,
+            save_medication_config,
+            add_medication,
+            update_medication,
+            delete_medication,
+            confirm_dose,
+            skip_dose,
+            snooze_dose,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

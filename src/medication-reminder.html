@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💊 用药提醒</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, var(--bg-color, #4CAF50) 0%, var(--bg-color-2, #66BB6A) 100%);
+    color: #fff;
+    width: 420px;
+    height: 320px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+  }
+  .header {
+    -webkit-app-region: drag;
+    display: flex;
+    align-items: center;
+    padding: 14px 18px 6px;
+    gap: 12px;
+  }
+  .icon-circle {
+    width: 56px;
+    height: 56px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    flex-shrink: 0;
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,255,255,0.4); }
+    50%      { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(255,255,255,0); }
+  }
+  .title-block { flex: 1; min-width: 0; }
+  .severity-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.25);
+    margin-bottom: 2px;
+  }
+  .med-title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .close-btn {
+    -webkit-app-region: no-drag;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: background 0.2s;
+  }
+  .close-btn:hover { background: rgba(255,255,255,0.35); }
+
+  .body {
+    flex: 1;
+    padding: 6px 18px 12px;
+    overflow: hidden;
+  }
+  .message {
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0.95;
+    word-break: break-all;
+  }
+  .meta {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .meta-chip {
+    background: rgba(255,255,255,0.18);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+  .notes {
+    margin-top: 8px;
+    font-size: 12px;
+    opacity: 0.9;
+    background: rgba(0,0,0,0.15);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border-left: 3px solid rgba(255,255,255,0.5);
+  }
+
+  .footer {
+    -webkit-app-region: no-drag;
+    padding: 10px 14px 14px;
+    display: flex;
+    gap: 8px;
+    background: rgba(0,0,0,0.12);
+  }
+  .btn {
+    flex: 1;
+    border: none;
+    padding: 10px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .btn-primary {
+    background: rgba(255,255,255,0.95);
+    color: var(--bg-color, #2E7D32);
+  }
+  .btn-primary:hover { background: #fff; transform: translateY(-1px); }
+  .btn-ghost {
+    background: rgba(255,255,255,0.2);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.3); }
+  .btn-danger {
+    background: rgba(244, 67, 54, 0.85);
+  }
+  .btn-danger:hover { background: rgba(244, 67, 54, 1); }
+
+  .countdown-bar {
+    height: 3px;
+    background: rgba(255,255,255,0.3);
+    overflow: hidden;
+  }
+  .countdown-fill {
+    height: 100%;
+    background: #fff;
+    width: 100%;
+    transition: width 1s linear;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="icon-circle" id="icon">💊</div>
+    <div class="title-block">
+      <div class="severity-badge" id="severity-badge">⏰ 准时</div>
+      <div class="med-title" id="med-title">用药提醒</div>
+    </div>
+    <button class="close-btn" id="close-btn" title="关闭">×</button>
+  </div>
+
+  <div class="body">
+    <div class="message" id="message">该吃药啦～</div>
+    <div class="meta">
+      <span class="meta-chip" id="meta-time">⏰ 计划 08:00</span>
+      <span class="meta-chip" id="meta-dosage">💊 1片</span>
+      <span class="meta-chip" id="meta-relation">🍽 饭后</span>
+    </div>
+    <div class="notes" id="notes" style="display:none">📝 备注</div>
+  </div>
+
+  <div class="footer">
+    <button class="btn btn-primary" id="btn-confirm">✅ 已服用</button>
+    <button class="btn btn-ghost" id="btn-snooze">⏱ 10分钟</button>
+    <button class="btn btn-danger" id="btn-skip">🚫 跳过</button>
+  </div>
+
+  <div class="countdown-bar">
+    <div class="countdown-fill" id="countdown-fill"></div>
+  </div>
+
+<script>
+const { invoke } = window.__TAURI__.core;
+const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
+
+const params = new URLSearchParams(window.location.search);
+const logId = params.get("log_id") || "";
+const medName = params.get("name") || "药品";
+const title = params.get("title") || "⏰ 该吃药啦";
+const body = params.get("body") || "";
+const time = params.get("time") || "";
+const severity = parseInt(params.get("severity") || "1", 10);
+const icon = params.get("icon") || "💊";
+const color = params.get("color") || "#4CAF50";
+const dosage = params.get("dosage") || "";
+const unit = params.get("unit") || "";
+const relation = params.get("relation") || "";
+const notes = params.get("notes") || "";
+
+// 主题色：基于药品颜色生成第二个色阶
+const bg2 = lightenColor(color, 0.15);
+document.documentElement.style.setProperty("--bg-color", color);
+document.documentElement.style.setProperty("--bg-color-2", bg2);
+
+document.getElementById("icon").textContent = icon;
+document.getElementById("med-title").textContent = medName;
+document.getElementById("message").textContent = body;
+document.getElementById("meta-time").textContent = `⏰ 计划 ${time}`;
+
+let dosageText = "";
+if (dosage) dosageText = `💊 ${dosage}`;
+else if (unit) dosageText = `💊 1${unit}`;
+if (dosageText) document.getElementById("meta-dosage").textContent = dosageText;
+
+if (relation) document.getElementById("meta-relation").textContent = `🍽 ${relation}`;
+else document.getElementById("meta-relation").style.display = "none";
+
+if (notes) {
+  document.getElementById("notes").textContent = `📝 ${notes}`;
+  document.getElementById("notes").style.display = "block";
+}
+
+const sevLabels = ["⏰ 准时", "💊 该服药", "⚠️ 稍延迟", "🔴 严重超时"];
+document.getElementById("severity-badge").textContent = sevLabels[Math.min(severity, sevLabels.length - 1)];
+
+// 60 秒倒计时进度条
+let total = 60, left = total;
+const fill = document.getElementById("countdown-fill");
+const timer = setInterval(() => {
+  left -= 1;
+  if (left <= 0) { clearInterval(timer); fill.style.width = "0%"; }
+  else fill.style.width = (left / total * 100) + "%";
+}, 1000);
+
+function closeWindow() {
+  getCurrentWebviewWindow().close().catch(() => {});
+}
+
+async function act(cmd, extra = {}) {
+  try {
+    await invoke(cmd, { logId, ...extra });
+    closeWindow();
+  } catch (e) {
+    console.error("Action failed", e);
+    // 即使失败也关闭窗口，避免堆积
+    setTimeout(closeWindow, 1000);
+  }
+}
+
+document.getElementById("btn-confirm").addEventListener("click", () => act("confirm_dose"));
+document.getElementById("btn-skip").addEventListener("click", () => act("skip_dose", { reason: "通过提醒窗口跳过" }));
+document.getElementById("btn-snooze").addEventListener("click", () => act("snooze_dose", { minutes: 10 }));
+document.getElementById("close-btn").addEventListener("click", closeWindow);
+
+// ESC 关闭
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeWindow();
+});
+
+function lightenColor(hex, amount) {
+  // hex like "#RRGGBB"
+  const h = hex.replace("#", "");
+  if (h.length !== 6) return hex;
+  const r = Math.min(255, parseInt(h.substr(0, 2), 16) + Math.round(255 * amount));
+  const g = Math.min(255, parseInt(h.substr(2, 2), 16) + Math.round(255 * amount));
+  const b = Math.min(255, parseInt(h.substr(4, 2), 16) + Math.round(255 * amount));
+  return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+</script>
+</body>
+</html>

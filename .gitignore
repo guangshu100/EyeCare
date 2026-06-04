@@ -26,3 +26,6 @@ dist-ssr
 
 # Windows special file
 nul
+/.vscode/
+/.codeartsdoer/
+/docs/
